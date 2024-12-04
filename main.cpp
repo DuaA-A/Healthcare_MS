@@ -1,7 +1,7 @@
 #include <iostream>
 #include <fstream>
 #include <string>
-#include "sstream"
+#include <sstream>
 #include <vector>
 #include <map>
 #include <algorithm>
@@ -66,6 +66,7 @@ public:
     void saveAvailList(const vector<int>& availList, const string& fileName);
 
 
+
 private:
     string readRecordFromFile(const string& fileName, int position);
     int findAvailableSlot(vector<int>& availList, const string& fileName);
@@ -109,11 +110,15 @@ void HealthcareManagementSystem::markDeleted(vector<int>& availList, int positio
     fstream file(fileName, ios::in | ios::out);
     file.seekp(position-1, ios::beg);
     file.put('*'); 
+    availList.push_back(position); 
     file.close();
 }
 
-
 void HealthcareManagementSystem::addDoctor(const string& doctorID, const string& name, const string& address) {
+    if (doctorID.length() > 15 || name.length() > 30 || address.length() > 30) {
+        cout << "Error: Input exceeds the maximum allowed length.\n";
+        return;
+    }
     if (binarySearch(doctorPrimaryIndex, doctorID) != -1) {
         cout << "Doctor with this ID already exists.\n";
         return;
@@ -125,14 +130,14 @@ void HealthcareManagementSystem::addDoctor(const string& doctorID, const string&
             cerr << "Error opening doctors.txt!" << endl;
             return;
         }
-        doctorFile.seekp(0, ios::end);  
-        position = doctorFile.tellp(); 
-        doctorFile.close(); 
+        doctorFile.seekp(0, ios::end);
+        position = doctorFile.tellp();
+        doctorFile.close();
     }
     string fullRecord = doctorID + "|" + name + "|" + address;
     int recordLength = fullRecord.length();
     stringstream ss;
-    ss << setw(4) << setfill('0') << recordLength;
+    ss << setw(4) << setfill('0') << fullRecord.length();
     string fixedLength = ss.str();
     fstream doctorFile(DOCTOR_FILE, ios::in | ios::out);
     doctorFile.seekp(position, ios::beg);
@@ -140,6 +145,7 @@ void HealthcareManagementSystem::addDoctor(const string& doctorID, const string&
     doctorFile.close();
     doctorPrimaryIndex.push_back({doctorID, position});
     sort(doctorPrimaryIndex.begin(), doctorPrimaryIndex.end());
+    doctorSecondaryIndex.insert(name, doctorID);
     fstream doctorIndexFile(DOCTOR_INDEX_FILE, ios::in | ios::out | ios::app);
     if (!doctorIndexFile) {
         cerr << "Error opening doctor.index!" << endl;
@@ -147,8 +153,10 @@ void HealthcareManagementSystem::addDoctor(const string& doctorID, const string&
     }
     doctorIndexFile << doctorID << "|" << position << "\n";
     doctorIndexFile.close();
+
     cout << "Doctor added successfully.\n";
 }
+
 
 void HealthcareManagementSystem::deleteDoctor() {
     string doctorID;
@@ -175,7 +183,6 @@ void HealthcareManagementSystem::searchDoctorByID() {
         cout << "Doctor not found.\n";
         return;
     }
-
      // Read the doctor record from the file
     string record = readRecordFromFile(DOCTOR_FILE, doctorPrimaryIndex[pos].second);
     cout << "Doctor Record: " << record << endl;
@@ -224,15 +231,14 @@ void HealthcareManagementSystem::searchDoctorByID() {
              string name = record.substr(d1 + 1, d2 - d1 - 1);  // Doctor Name
              string address = record.substr(d2 + 1, d3 - d2 - 1);  // Doctor Address
 
-             cout << "\n--- Doctor Details ---\n";
-             cout << "Doctor ID: " << id << "\n";
+            cout << "\n--- Doctor Details ---\n";
+            cout << "Doctor ID: " << id << "\n";
             cout << "Name: " << name << "\n";
-             cout << "Address: " << address << "\n";
-             cout << "-----------------------\n";
+            cout << "Address: " << address << "\n";
+            cout << "-----------------------\n";
          }
      }
  }
-
 void HealthcareManagementSystem::addAppointment(const string& appointmentID, const string& doctorID, const string& date) {
     if (appointmentID.length() > 15 || doctorID.length() > 15 || date.length() > 30) {
         cout << "Error: Input exceeds the maximum allowed length.\n";
@@ -249,24 +255,30 @@ void HealthcareManagementSystem::addAppointment(const string& appointmentID, con
             cerr << "Error opening appointments.txt!" << endl;
             return;
         }
-        appointmentFile.seekp(0, ios::end); 
-        position = appointmentFile.tellp(); 
-        appointmentFile.close(); 
+        appointmentFile.seekp(0, ios::end);
+        position = appointmentFile.tellp();
+        appointmentFile.close();
     }
     string fullRecord = appointmentID + "|" + date + "|" + doctorID;
     int recordLength = fullRecord.length();
     stringstream ss;
-    ss << setw(4) << setfill('0') << recordLength;
+    ss << setw(4) << setfill('0') << recordLength; 
     string fixedLength = ss.str();
     fstream appointmentFile(APPOINTMENT_FILE, ios::in | ios::out);
+    if (!appointmentFile) {
+        cerr << "Error: Unable to open " << APPOINTMENT_FILE << endl;
+        return;
+    }
     appointmentFile.seekp(position, ios::beg);
-    appointmentFile << fixedLength << fullRecord << "\n";
+    appointmentFile << fixedLength << fullRecord << string(1, ' '); 
     appointmentFile.close();
     auto it = lower_bound(appointmentPrimaryIndex.begin(), appointmentPrimaryIndex.end(), make_pair(appointmentID, 0));
     appointmentPrimaryIndex.insert(it, {appointmentID, position});
     appointmentSecondaryIndex.insert(doctorID, appointmentID);
+    saveIndexes();
     cout << "Appointment added successfully.\n";
 }
+
 
 
 void HealthcareManagementSystem::updateAppointment() {
@@ -352,7 +364,10 @@ void HealthcareManagementSystem::searchAppointmentsByDoctorID() {
 }
 void HealthcareManagementSystem::loadAvailList(vector<int>& availList, const string& fileName) {
     ifstream file(fileName, ios::in);
-    if (!file) return;
+    if (!file) {
+        cerr << "Error: Unable to open " << fileName << " for reading." << endl;
+        return;
+    }
     int pos;
     while (file >> pos) {
         availList.push_back(pos);
@@ -362,6 +377,10 @@ void HealthcareManagementSystem::loadAvailList(vector<int>& availList, const str
 
 void HealthcareManagementSystem::saveAvailList(const vector<int>& availList, const string& fileName) {
     ofstream file(fileName, ios::out | ios::trunc);
+    if (!file) {
+        cerr << "Error: Unable to open " << fileName << " for writing." << endl;
+        return;
+    }
     for (int pos : availList) {
         file << pos << "\n";
     }
@@ -399,22 +418,30 @@ void HealthcareManagementSystem::loadIndexes() {
         appointmentIndexFile.close();
     }
     sort(appointmentPrimaryIndex.begin(), appointmentPrimaryIndex.end());
-
     loadAvailList(doctorAvailList, "doctor.avail");
     loadAvailList(appointmentAvailList, "appointment.avail");
 }
-
 void HealthcareManagementSystem::saveIndexes() {
     fstream doctorIndexFile(DOCTOR_INDEX_FILE, ios::out);
+    if (!doctorIndexFile) {
+        cerr << "Error: Unable to open " << DOCTOR_INDEX_FILE << " for writing." << endl;
+        return;
+    }
     for (const auto& entry : doctorPrimaryIndex) {
         doctorIndexFile << entry.first << "|" << entry.second << "\n";
     }
     doctorIndexFile.close();
+
     fstream appointmentIndexFile(APPOINTMENT_INDEX_FILE, ios::out);
+    if (!appointmentIndexFile) {
+        cerr << "Error: Unable to open " << APPOINTMENT_INDEX_FILE << " for writing." << endl;
+        return;
+    }
     for (const auto& entry : appointmentPrimaryIndex) {
         appointmentIndexFile << entry.first << "|" << entry.second << "\n";
     }
     appointmentIndexFile.close();
+
     saveAvailList(doctorAvailList, "doctor.avail");
     saveAvailList(appointmentAvailList, "appointment.avail");
 }
@@ -450,56 +477,79 @@ void HealthcareManagementSystem::updateDoctor() {
 
     cout << "Doctor updated successfully.\n";
 }
-
 int main() {
     HealthcareManagementSystem system;
     system.loadIndexes();
     int choice;
+    
     do {
-    system.displayMenu();
-    cin >> choice;
-    switch (choice) {
-        case 1: {
-            string doctorID, name, address;
-            cout << "Enter Doctor ID: ";
-            cin >> doctorID;
-            cout << "Enter Doctor Name: ";
-            cin.ignore();
-            getline(cin, name);
-            cout << "Enter Doctor Address: ";
-            getline(cin, address);
-            system.addDoctor(doctorID, name, address);
-            break;
+        system.displayMenu(); 
+        cin >> choice; 
+        
+        switch (choice) {
+            case 1: {  // Add New Doctor
+                string doctorID, name, address;
+                cout << "Enter Doctor ID: ";
+                cin >> doctorID;
+                cout << "Enter Doctor Name: ";
+                cin.ignore(); 
+                getline(cin, name);
+                cout << "Enter Doctor Address: ";
+                getline(cin, address);
+                system.addDoctor(doctorID, name, address);  
+                break;
+            }
+            case 2: {  // Add New Appointment
+                string appointmentID, doctorID, date;
+                cout << "Enter Appointment ID: ";
+                cin >> appointmentID;
+                cout << "Enter Doctor ID: ";
+                cin >> doctorID;
+                cout << "Enter Appointment Date: ";
+                cin.ignore(); 
+                getline(cin, date);
+                system.addAppointment(appointmentID, doctorID, date);
+                break;
+            }
+            case 3: {  // Update Doctor Name
+                system.updateDoctor(); 
+                break;
+            }
+            case 4: {  // Update Appointment Date
+                system.updateAppointment(); 
+                break;
+            }
+            case 5: {  // Delete Doctor
+                system.deleteDoctor();  
+                break;
+            }
+            case 6: {  // Delete Appointment
+                system.deleteAppointment();  
+                break;
+            }
+            case 7: {  // Search Doctor by ID
+                system.searchDoctorByID(); 
+                break;
+            }
+            case 8: {  // Search Doctor by Name
+                system.searchDoctorByName();
+                break;
+            }
+            case 9: {  // Search Appointments by Doctor ID
+                system.searchAppointmentsByDoctorID();  
+                break;
+            }
+            case 10: { 
+                cout << "Exiting...\n";
+                break;
+            }
+            default: { 
+                cout << "Invalid choice. Please try again.\n";
+                break;
+            }
         }
-        case 2: {
-            string appointmentID, doctorID, date;
-            cout << "Enter Appointment ID: ";
-            cin >> appointmentID;
-            cout << "Enter Doctor ID: ";
-            cin >> doctorID;
-            cout << "Enter Appointment Date: ";
-            cin.ignore();
-            getline(cin, date);
-            system.addAppointment(appointmentID, doctorID, date);
-            break;
-        }
-        case 4:
-            system.updateAppointment();
-            break;
-        case 6:
-            system.deleteAppointment();
-            break;
-        case 9:
-            system.searchAppointmentsByDoctorID();
-            break;
-        case 10:
-            cout << "Exiting...\n";
-            break;
-        default:
-            cout << "Invalid choice.\n";
-    }
-    } while (choice != 10);
-    system.saveIndexes();
-    return 0;
-}
+    } while (choice != 10); 
 
+    system.saveIndexes();  
+    return 0;  
+}
