@@ -14,7 +14,7 @@ int binarySearch(const vector<pair<T, int>>& index, const T& key) {
     while (low <= high) {
         int mid = low + (high - low) / 2;
         if (index[mid].first == key)
-            return mid; // Key found
+            return mid; 
         else if (index[mid].first < key)
             low = mid + 1;
         else
@@ -37,8 +37,13 @@ class HealthcareManagementSystem {
     SecondaryIndex doctorSecondaryIndex;
     vector<int> doctorAvailList;
 
+     vector<pair<string, int>> appointmentPrimaryIndex;
+    vector<int> appointmentAvailList;
+
     const string DOCTOR_FILE = "doctors.txt";
     const string DOCTOR_INDEX_FILE = "doctor.index";
+
+    const string APPOINTMENT_FILE = "appointments.txt";
 
 public:
     void displayMenu();
@@ -49,6 +54,10 @@ public:
     void searchDoctorByName();
     void loadIndexes();
     void saveIndexes();
+    void addAppointment(const string& appointmentID, const string& date, const string& doctorID);
+    void deleteAppointment();
+    void searchAppointmentByID();
+    void updateAppointment();
 
 private:
     string readRecordFromFile(const string& fileName, int position);
@@ -72,7 +81,11 @@ void HealthcareManagementSystem::displayMenu() {
     cout << "3. Delete Doctor\n";
     cout << "4. Search Doctor by ID\n";
     cout << "5. Search Doctor by Name\n";
-    cout << "6. Exit\n";
+    cout << "6. Add Appointment\n";
+    cout << "7. Delete Appointment\n";
+    cout << "8. Search Appointment by ID\n";
+    cout << "9. Update Appointment\n";
+    cout << "10. Exit\n";
     cout << "Enter your choice: ";
 }
 
@@ -171,6 +184,133 @@ void HealthcareManagementSystem::deleteDoctor() {
 
     cout << "Doctor deleted successfully.\n";
 }
+void HealthcareManagementSystem::addAppointment(const string& appointmentID, const string& date, const string& doctorID) {
+    // Validate Doctor ID
+    if (binarySearch(doctorPrimaryIndex, doctorID) == -1) {
+        cout << "Error: Doctor ID does not exist.\n";
+        return;
+    }
+
+    // Check if Appointment already exists
+    if (binarySearch(appointmentPrimaryIndex, appointmentID) != -1) {
+        cout << "Error: Appointment ID already exists.\n";
+        return;
+    }
+
+  
+    int position = findAvailableSlot(appointmentAvailList, APPOINTMENT_FILE);
+
+    if (position == -1) {
+        fstream file(APPOINTMENT_FILE, ios::in | ios::out);
+        file.seekp(0, ios::end);
+        position = file.tellp();
+        file.close();
+    }
+
+ 
+    string record = appointmentID + "|" + date + "|" + doctorID;
+    fstream file(APPOINTMENT_FILE, ios::in | ios::out);
+    file.seekp(position, ios::beg);
+    file << record << "\n";
+    file.close();
+
+ 
+    appointmentPrimaryIndex.push_back({appointmentID, position});
+    sort(appointmentPrimaryIndex.begin(), appointmentPrimaryIndex.end());
+
+    cout << "Appointment added successfully.\n";
+}
+
+
+void HealthcareManagementSystem::searchAppointmentByID() {
+    string appointmentID;
+    cout << "Enter Appointment ID to search: ";
+    cin >> appointmentID;
+
+    int pos = binarySearch(appointmentPrimaryIndex, appointmentID);
+    if (pos == -1) {
+        cout << "Error: Appointment not found.\n";
+        return;
+    }
+
+    string record = readRecordFromFile(APPOINTMENT_FILE, appointmentPrimaryIndex[pos].second);
+    cout << "Appointment Record: " << record << "\n";
+}
+
+void HealthcareManagementSystem::deleteAppointment() {
+    string appointmentID;
+    cout << "Enter Appointment ID to delete: ";
+    cin >> appointmentID;
+
+    int pos = binarySearch(appointmentPrimaryIndex, appointmentID);
+    if (pos == -1) {
+        cout << "Error: Appointment not found.\n";
+        return;
+    }
+
+    markDeleted(appointmentAvailList, appointmentPrimaryIndex[pos].second, APPOINTMENT_FILE);
+    appointmentPrimaryIndex.erase(appointmentPrimaryIndex.begin() + pos);
+
+    cout << "Appointment deleted successfully.\n";
+}
+
+
+void HealthcareManagementSystem::updateAppointment() {
+    string appointmentID;
+    cout << "Enter Appointment ID to update: ";
+    cin >> appointmentID;
+
+    // Search for the appointment in the primary index
+    int pos = binarySearch(appointmentPrimaryIndex, appointmentID);
+    if (pos == -1) {
+        cout << "Error: Appointment not found.\n";
+        return;
+    }
+
+    // Read the record from the file
+    string record = readRecordFromFile(APPOINTMENT_FILE, appointmentPrimaryIndex[pos].second);
+
+    // Parse the record fields
+    size_t delim1 = record.find('|');
+    size_t delim2 = record.find('|', delim1 + 1);
+
+    string currentDate = record.substr(delim1 + 1, delim2 - delim1 - 1);
+    string currentDoctorID = record.substr(delim2 + 1);
+
+    cout << "Current Appointment Date: " << currentDate << "\n";
+    cout << "Enter new Appointment Date (leave blank to keep current): ";
+    string newDate;
+    cin.ignore();
+    getline(cin, newDate);
+
+    cout << "Current Doctor ID: " << currentDoctorID << "\n";
+    cout << "Enter new Doctor ID (leave blank to keep current): ";
+    string newDoctorID;
+    getline(cin, newDoctorID);
+
+    // Validate the new Doctor ID if changed
+    if (!newDoctorID.empty() && binarySearch(doctorPrimaryIndex, newDoctorID) == -1) {
+        cout << "Error: New Doctor ID does not exist.\n";
+        return;
+    }
+
+    // Update fields if input is provided
+    if (!newDate.empty()) currentDate = newDate;
+    if (!newDoctorID.empty()) currentDoctorID = newDoctorID;
+
+    // Reconstruct the updated record
+    string updatedRecord = appointmentID + "|" + currentDate + "|" + currentDoctorID;
+
+    // Write the updated record back to the file
+    fstream file(APPOINTMENT_FILE, ios::in | ios::out);
+    file.seekp(appointmentPrimaryIndex[pos].second, ios::beg);
+    file << updatedRecord << "\n";
+    file.close();
+
+    cout << "Appointment updated successfully.\n";
+}
+
+
 // void HealthcareManagementSystem::searchDoctorByID() {
 //     string doctorID;
 //     cout << "Enter Doctor ID to search: ";
@@ -247,29 +387,52 @@ void HealthcareManagementSystem::deleteDoctor() {
 
 void HealthcareManagementSystem::loadIndexes() {
     // Load doctor primary index from the file
-    fstream doctorIndexFile(DOCTOR_INDEX_FILE, ios::in);
-    if (doctorIndexFile.is_open()) {
-        string record;
+    fstream doctorFile(DOCTOR_FILE, ios::in);
+    if (doctorFile.is_open()) {
+        string line;
         int position = 0;
-        while (getline(doctorIndexFile, record)) {
-            stringstream ss(record);
-            string doctorID;
-            int doctorPosition;
-
-            getline(ss, doctorID, '|');
-            ss >> doctorPosition;
-
-            doctorPrimaryIndex.push_back({doctorID, doctorPosition});
-            position = doctorIndexFile.tellg();
+        while (getline(doctorFile, line)) {
+            size_t delim1 = line.find('|');
+            if (delim1 != string::npos) {
+                string doctorID = line.substr(0, delim1);  // Extract DoctorID
+                doctorPrimaryIndex.push_back({doctorID, position});  // Store position
+            }
+            position = doctorFile.tellg();  // Get the current file position
         }
-        doctorIndexFile.close();
+        doctorFile.close();
+        
+        if (doctorPrimaryIndex.empty()) {
+            cerr << "Warning: No doctor records found in " << DOCTOR_FILE << ".\n";
+        }
+        sort(doctorPrimaryIndex.begin(), doctorPrimaryIndex.end());
+    } else {
+        cerr << "Error: Could not open " << DOCTOR_FILE << " for reading.\n";
     }
 
-
-    // Sort the primary index in memory
-    sort(doctorPrimaryIndex.begin(), doctorPrimaryIndex.end());
-
+    // Load appointment primary index from the file
+    fstream appointmentFile(APPOINTMENT_FILE, ios::in);
+    if (appointmentFile.is_open()) {
+        string record;
+        int position = 0;
+        while (getline(appointmentFile, record)) {
+            size_t delim1 = record.find('|');
+            if (delim1 != string::npos) {
+                string appointmentID = record.substr(0, delim1);  // Extract AppointmentID
+                appointmentPrimaryIndex.push_back({appointmentID, position});  // Store position
+            }
+            position = appointmentFile.tellg();  // Get the current file position
+        }
+        appointmentFile.close();
+        
+        if (appointmentPrimaryIndex.empty()) {
+            cerr << "Warning: No appointment records found in " << APPOINTMENT_FILE << ".\n";
+        }
+        sort(appointmentPrimaryIndex.begin(), appointmentPrimaryIndex.end());
+    } else {
+        cerr << "Error: Could not open " << APPOINTMENT_FILE << " for reading.\n";
+    }
 }
+
 
 void HealthcareManagementSystem::saveIndexes() {
     fstream doctorIndexFile(DOCTOR_INDEX_FILE, ios::out);
@@ -277,6 +440,12 @@ void HealthcareManagementSystem::saveIndexes() {
         doctorIndexFile << entry.first << "|" << entry.second << "\n";
     }
     doctorIndexFile.close();
+
+     fstream appointmentFile(APPOINTMENT_FILE, ios::out);
+    for (const auto& entry : appointmentPrimaryIndex) {
+        appointmentFile << entry.first << "|" << entry.second << "\n";
+    }
+    appointmentFile.close();
 }
 
 void HealthcareManagementSystem::updateDoctor() {
@@ -356,10 +525,33 @@ int main() {
             //     system.searchDoctorByName();
             //     break;
             // }
-            case 6: {
+               
+               case 6: {
+                string appointmentID, date, doctorID;
+                cout << "Enter Appointment ID: ";
+                cin >> appointmentID;
+                cout << "Enter Appointment Date: ";
+                cin.ignore();
+                getline(cin, date);
+                cout << "Enter Doctor ID: ";
+                cin >> doctorID;
+                system.addAppointment(appointmentID, date, doctorID);
+                break;
+            }
+            case 7:
+                system.deleteAppointment();
+                break;
+            case 8:
+                system.searchAppointmentByID();
+                break;
+            case 9:
+            system.updateAppointment();
+                break;
+            case 10: {
                 cout << "Exiting...\n";
                 break;
             }
+        
             default: {
                 cout << "Invalid choice. Please try again.\n";
                 break;
