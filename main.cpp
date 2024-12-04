@@ -14,7 +14,7 @@ int binarySearch(const vector<pair<T, int>>& index, const T& key) {
     while (low <= high) {
         int mid = low + (high - low)/ 2;
         if (index[mid].first == key)
-            return mid; 
+            return mid;
         else if (index[mid].first < key)
             low = mid + 1;
         else
@@ -139,17 +139,19 @@ public:
     void displayMenu();
     void addDoctor(const string& doctorID, const string& name, const string& address);
     void updateDoctor();
+    void searchNameForQuary(string doctorID);
     void deleteDoctor();
-    void searchDoctorByID();
+    void searchDoctorByID(string doctorID);
     void searchDoctorByName();
     void loadIndexes();
     void saveIndexes();
-
+    void processQuery(const string& query);
 private:
     string readRecordFromFile(const string& fileName, int position);
     int static findAvailableSlot(vector<int>& availList, const string& fileName);
     void markDeleted(vector<int>& availList, int position, const string& fileName);
     string extractField(const string& record, int fieldIndex);
+
 };
 
 
@@ -209,24 +211,23 @@ void HealthcareManagementSystem::addDoctor(const string& doctorID, const string&
 
     string fullRecord = doctorID + "|" + name + "|" + address;
     int recordLength = fullRecord.length();
-
     int position = -1;
 
-    if (position == -1 && doctorPrimaryIndex.empty()) {
-        position = 0;  // ensure that if empty the p=0
-    }
+    if (!doctorAvailList.empty()) {
 
-    while (!doctorAvailList.empty()) {
         int availablePosition = doctorAvailList.back();
 
         string existingRecord = readRecordFromFile(DOCTOR_FILE, availablePosition);
-        int existingRecordLength = stoi(existingRecord.substr(0, 4)); // Assuming first 4 characters are record length
+        int existingRecordLength = stoi(existingRecord.substr(0, 4));
+
         if (existingRecordLength >= recordLength) {
+
             position = availablePosition;
-            cout<<"avail list"<<doctorAvailList.back()<<endl;//for debug
             doctorAvailList.pop_back();
-            break;
         }
+    }
+    if(position == -1 && doctorPrimaryIndex.empty()) {
+        position=0;
     }
 
     if (position == -1) {
@@ -240,32 +241,30 @@ void HealthcareManagementSystem::addDoctor(const string& doctorID, const string&
         doctorFile.close();
     }
 
+    // Write the new doctor record
+    fstream doctorFile(DOCTOR_FILE, ios::in | ios::out);
+    doctorFile.seekp(position, ios::beg);
     stringstream ss;
     ss << setw(4) << setfill('0') << recordLength;
     string fixedLength = ss.str();
 
-    fstream doctorFile(DOCTOR_FILE, ios::in | ios::out);
-    doctorFile.seekp(position, ios::beg);
-
-    string existingRecord = readRecordFromFile(DOCTOR_FILE, position);
-    if (existingRecord.back() == '*') {
-        doctorFile.seekp(position + existingRecord.length() - 1, ios::beg); // Move to the end to clear the '*'
-        doctorFile.put(' ');
-    }
-
-    doctorFile << fixedLength << fullRecord << "\n";
+    // Append the new doctor record
+    doctorFile << fixedLength << fullRecord<<'\n';
     doctorFile.close();
-    // Update the primary index
+
     doctorPrimaryIndex.push_back({doctorID, position});
+    sort(doctorPrimaryIndex.begin(), doctorPrimaryIndex.end());
+
     // Update the secondary index (doctor's name)
     doctorSecondaryIndex.insert(name, doctorID);
-    sort(doctorPrimaryIndex.begin(), doctorPrimaryIndex.end());
-//save indexes
+
+    // Save indexes to file
     saveIndexes();
     doctorSecondaryIndex.save();
 
     cout << "Doctor added successfully.\n";
 }
+
 
 
 void HealthcareManagementSystem::deleteDoctor() {
@@ -301,10 +300,8 @@ void HealthcareManagementSystem::deleteDoctor() {
 }
 
 
-void HealthcareManagementSystem::searchDoctorByID() {
-    string doctorID;
-    cout << "Enter Doctor ID to search: ";
-    cin >> doctorID;
+void HealthcareManagementSystem::searchDoctorByID(string doctorID) {
+
 
     // Search doctorID in the primary index
     int pos = binarySearch(doctorPrimaryIndex, doctorID);
@@ -412,7 +409,7 @@ void HealthcareManagementSystem::updateDoctor() {
     string doctorID;
     cout << "Enter Doctor ID to update: ";
     cin >> doctorID;
-    
+
     int pos = binarySearch(doctorPrimaryIndex, doctorID);
     if (pos == -1) {
         cout << "Doctor not found.\n";
@@ -427,9 +424,9 @@ void HealthcareManagementSystem::updateDoctor() {
     }
 
     // Extract the current record length
-    int recordLength = stoi(record.substr(0, 4));  
+    int recordLength = stoi(record.substr(0, 4));
 
-    
+
     size_t d1 = record.find('|');  // Find the first delimiter (after the doctor ID)
     size_t d2 = record.find('|', d1 + 1);  // Find the second delimiter (after the doctor name)
     string name = record.substr(d1 + 1, d2 - d1 - 1);  // Doctor Name
@@ -472,10 +469,9 @@ void HealthcareManagementSystem::updateDoctor() {
     // Clear the '*' if present (for deleted records)
     if (readRecordFromFile(DOCTOR_FILE, doctorPrimaryIndex[pos].second).back() == '*') {
         doctorFile.seekp(doctorPrimaryIndex[pos].second + newRecord.length() - 1, ios::beg);
-        doctorFile.put(' '); // Clear the '*' to indicate it is no longer deleted
+        doctorFile.put(' ');
     }
 
-    // Write the fixed-length header and the new record
     stringstream ss;
     ss << setw(4) << setfill('0') << newRecordLength;
     string fixedLength = ss.str();
@@ -483,21 +479,90 @@ void HealthcareManagementSystem::updateDoctor() {
     doctorFile << fixedLength << newRecord;
     doctorFile.close();
 
-    // Update the primary index with the new doctor record
     doctorPrimaryIndex[pos].first = doctorID;
 
-    // Now, add the new name to the secondary index
     doctorSecondaryIndex.insert(newName, doctorID);
 
-    // Save the updated indexes to file
     saveIndexes();
     doctorSecondaryIndex.save();  // Save the secondary index
 
     cout << "Doctor record updated successfully.\n";
 }
+void HealthcareManagementSystem::searchNameForQuary(string doctorID) {
+    string name;
+    cout << "Enter Doctor Name to search: ";
+    cin.ignore();
+    getline(cin, name);
+
+    Node* doctorIDs = doctorSecondaryIndex.index[name].head;
+    if (!doctorIDs) {
+        cout << "No doctors found with the name: " << name << endl;
+        return;
+    }
+
+    while (doctorIDs) {
+        int pos = binarySearch(doctorPrimaryIndex, doctorIDs->doctorID);
+        if (pos != -1) {
+            string record = readRecordFromFile(DOCTOR_FILE, doctorPrimaryIndex[pos].second);
+
+            string doctorID = extractField(record.substr(4,record.length()), 0);
+            string doctorName = extractField(record, 1);
+            string doctorAddress = extractField(record, 2);
+
+            cout << "Name: " << doctorName << "\n";
+        }
+        doctorIDs = doctorIDs->next;
+    }
+}
+
+
+
+void HealthcareManagementSystem::processQuery(const string& query) {
+    string sanitizedQuery = query;
+    sanitizedQuery.erase(remove(sanitizedQuery.begin(), sanitizedQuery.end(), ' '), sanitizedQuery.end());
+
+    size_t posWhere = sanitizedQuery.find("WHERE");
+    if (posWhere == string::npos) {
+        cout << "Invalid query format.\n";
+        return;
+    }
+
+    string condition = sanitizedQuery.substr(posWhere + 5);
+    size_t posEqual = condition.find('=');
+    if (posEqual == string::npos) {
+        cout << "Invalid condition in query.\n";
+        return;
+    }
+
+    string key = condition.substr(0, posEqual);
+    string value = condition.substr(posEqual + 1);
+
+    // Clean up value to remove any extra characters (like quotes)
+    if (!value.empty() && value.front() == '\'' && value.back() == '\'') {
+        value = value.substr(1, value.size() - 2);
+    }
+
+    value.erase(0, value.find_first_not_of(' '));
+    value.erase(value.find_last_not_of(' ') + 1);
+
+    if (key == "DoctorID") {
+        searchDoctorByID(value);
+    }
+    else if (key == "DoctorName") {
+        cout << "Searching for Doctor Name: " << value << endl;
+       searchNameForQuary(value);
+    }
+    else
+    {
+        cout << "Unknown key in query.\n";
+    }
+}
+
 
 int main() {
     HealthcareManagementSystem system;
+    HealthcareManagementSystem query;
+
     system.loadIndexes();
 
     int choice;
@@ -527,7 +592,10 @@ int main() {
                 break;
             }
             case 4: {
-                system.searchDoctorByID();
+                string doctorID;
+                cout << "Enter Doctor ID to search: ";
+                cin >> doctorID;
+                system.searchDoctorByID(doctorID);
                 break;
             }
             case 5: {
@@ -536,6 +604,14 @@ int main() {
             }
             case 6: {
                 cout << "Exiting...\n";
+                break;
+            }
+            case 7:  {
+                string query;
+                cout << "Enter your query: ";
+                cin.ignore();
+                getline(cin, query);
+                system.processQuery(query);
                 break;
             }
             default: {
