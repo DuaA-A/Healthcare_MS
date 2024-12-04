@@ -270,7 +270,7 @@ void HealthcareManagementSystem::addAppointment(const string& appointmentID, con
         return;
     }
     appointmentFile.seekp(position, ios::beg);
-    appointmentFile << fixedLength << fullRecord << string(1, ' '); 
+    appointmentFile << fixedLength <<string(1, ' ') <<fullRecord << "\n"; 
     appointmentFile.close();
     auto it = lower_bound(appointmentPrimaryIndex.begin(), appointmentPrimaryIndex.end(), make_pair(appointmentID, 0));
     appointmentPrimaryIndex.insert(it, {appointmentID, position});
@@ -315,23 +315,26 @@ void HealthcareManagementSystem::deleteAppointment() {
     string appointmentID;
     cout << "Enter Appointment ID to delete: ";
     cin >> appointmentID;
-
     int pos = binarySearch(appointmentPrimaryIndex, appointmentID);
     if (pos == -1) {
         cout << "Appointment not found.\n";
         return;
     }
-    markDeleted(appointmentAvailList, appointmentPrimaryIndex[pos].second, APPOINTMENT_FILE);
-    string doctorID = readRecordFromFile(APPOINTMENT_FILE, appointmentPrimaryIndex[pos].second);
-    size_t delim1 = doctorID.find('|');
-    size_t delim2 = doctorID.find('|', delim1 + 1);
-    doctorID = doctorID.substr(delim2 + 1);
+    int position = appointmentPrimaryIndex[pos].second;
+    markDeleted(appointmentAvailList, position, APPOINTMENT_FILE);
     appointmentPrimaryIndex.erase(appointmentPrimaryIndex.begin() + pos);
+    string record = readRecordFromFile(APPOINTMENT_FILE, position);
+    size_t delim1 = record.find('|');
+    size_t delim2 = record.find('|', delim1 + 1);
+    string doctorID = record.substr(delim2 + 1);
     auto* appointments = appointmentSecondaryIndex.find(doctorID);
     if (appointments) {
-        appointments->erase(
-            remove(appointments->begin(), appointments->end(), appointmentID), appointments->end());
+        appointments->erase(remove(appointments->begin(), appointments->end(), appointmentID), appointments->end());
+        if (appointments->empty()) {
+            appointmentSecondaryIndex.index.erase(doctorID); 
+        }
     }
+    saveIndexes();
     cout << "Appointment deleted successfully.\n";
 }
 
