@@ -97,16 +97,6 @@ public:
 };
 class SecondaryIndex {
 public:
-    map<string, vector<string>> index;
-
-    void insert(const string& secondaryKey, const string& primaryKey) {
-        index[secondaryKey].push_back(primaryKey);
-    }
-    vector<string>* find(const string& secondaryKey) {
-        auto it = index.find(secondaryKey);
-        return it != index.end() ? &(it->second) : nullptr;
-    }
-
     map<string, LinkedList> Index;
     const string SECONDARY_INDEX_FILE = "doctor_secondary.index";  // File to store the secondary index
 
@@ -121,16 +111,19 @@ void SecondaryIndex::Insert(const string& secondaryKey, const string& doctorID) 
     Index[secondaryKey].insert(doctorID);
 }
 
-bool SecondaryIndex::find(const string& secondaryKey, const string& doctorID) {
-    return Index[secondaryKey].find(doctorID);
-}
-
+bool SecondaryIndex::find(const string& secondaryKey, const string& appointmentID) {
+        auto it = Index.find(secondaryKey);
+        if (it != Index.end()) {
+            return it->second.find(appointmentID);
+        }
+        return false;
+    }
+    
 void SecondaryIndex::remove(const string& secondaryKey, const string& doctorID) {
     LinkedList& doctorList = Index[secondaryKey];
-
     doctorList.remove(doctorID);
     if (doctorList.head == nullptr) {
-        index.erase(secondaryKey);
+        Index.erase(secondaryKey);
     }
 }
 
@@ -144,7 +137,7 @@ void SecondaryIndex::load() {
             string doctorID;
             getline(ss, name, '|');
             while (getline(ss, doctorID, '|')) {
-                insert(name, doctorID);
+                Insert(name, doctorID);
             }
         }
         file.close();
@@ -429,50 +422,9 @@ void HealthcareManagementSystem::addAppointment(const string& appointmentID, con
     appointmentFile.close();
     auto it = lower_bound(appointmentPrimaryIndex.begin(), appointmentPrimaryIndex.end(), make_pair(appointmentID, 0));
     appointmentPrimaryIndex.insert(it, {appointmentID, position});
-    appointmentSecondaryIndex.insert(doctorID, appointmentID);
+    appointmentSecondaryIndex.Insert(doctorID, appointmentID);
     saveIndexes();
     cout << "Appointment added successfully.\n";
-}
-string HealthcareManagementSystem::extractField(const string& record, int fieldIndex) {
-    stringstream ss(record);
-    string field;
-    int currentIndex = 0;
-    while (getline(ss, field, '|')) {
-        if (currentIndex == fieldIndex) {
-            return field;
-        }
-        currentIndex++;
-    }
-    return "";  
-}
-
-void HealthcareManagementSystem::updateAppointment() {
-    string appointmentID, newDate;
-    cout << "Enter Appointment ID to update: ";
-    cin >> appointmentID;
-    int pos = binarySearch(appointmentPrimaryIndex, appointmentID);
-    if (pos == -1) {
-        cout << "Appointment not found.\n";
-        return;
-    }
-    cout << "Enter new appointment date (leave blank to skip): ";
-    cin.ignore();
-    getline(cin, newDate);
-    string record = readRecordFromFile(APPOINTMENT_FILE, appointmentPrimaryIndex[pos].second);
-    size_t delim1 = record.find('|');
-    size_t delim2 = record.find('|', delim1 + 1);
-    string id = record.substr(0, delim1);  
-    string date = record.substr(delim1 + 1, delim2 - delim1 - 1);  
-    string doctorID = record.substr(delim2 + 1); 
-    if (!newDate.empty()) {
-        date = newDate; 
-    }
-    string updatedRecord = id + "|" + date + "|" + doctorID;
-    fstream file(APPOINTMENT_FILE, ios::in | ios::out);
-    file.seekp(appointmentPrimaryIndex[pos].second, ios::beg);
-    file << setw(4) << setfill('0') << updatedRecord.length() << updatedRecord << "\n";
-    file.close();
-    cout << "Appointment updated successfully.\n";
 }
 
 void HealthcareManagementSystem::loadAvailList(vector<int>& availList, const string& fileName) {
@@ -534,6 +486,8 @@ void HealthcareManagementSystem::deleteAppointment() {
     string appointmentID;
     cout << "Enter Appointment ID to delete: ";
     cin >> appointmentID;
+
+    // Find the appointment in the primary index
     int pos = binarySearch(appointmentPrimaryIndex, appointmentID);
     if (pos == -1) {
         cout << "Appointment not found.\n";
@@ -541,34 +495,42 @@ void HealthcareManagementSystem::deleteAppointment() {
     }
     int position = appointmentPrimaryIndex[pos].second;
     markDeleted(appointmentAvailList, position, APPOINTMENT_FILE);
-    appointmentPrimaryIndex.erase(appointmentPrimaryIndex.begin() + pos);
     string record = readRecordFromFile(APPOINTMENT_FILE, position);
     size_t delim1 = record.find('|');
     size_t delim2 = record.find('|', delim1 + 1);
     string doctorID = record.substr(delim2 + 1);
-    auto* appointments = appointmentSecondaryIndex.find(doctorID);
-    if (appointments) {
-        appointments->erase(remove(appointments->begin(), appointments->end(), appointmentID), appointments->end());
-        if (appointments->empty()) {
-            appointmentSecondaryIndex.index.erase(doctorID);
+
+    appointmentPrimaryIndex.erase(appointmentPrimaryIndex.begin() + pos);
+    auto it = appointmentSecondaryIndex.Index.find(doctorID);
+    if (it != appointmentSecondaryIndex.Index.end()) {
+        LinkedList& appointmentList = it->second;
+        appointmentList.remove(appointmentID);
+        if (appointmentList.head == nullptr) {
+            appointmentSecondaryIndex.Index.erase(doctorID);
         }
     }
     saveIndexes();
     cout << "Appointment deleted successfully.\n";
 }
 
+
 void HealthcareManagementSystem::searchAppointmentsByDoctorID() {
     string doctorID;
     cout << "Enter Doctor ID to search for appointments: ";
     cin >> doctorID;
-    auto* appointmentIDs = appointmentSecondaryIndex.find(doctorID);
-    if (!appointmentIDs || appointmentIDs->empty()) {
+
+    // Find the linked list for the given Doctor ID
+    auto it = appointmentSecondaryIndex.Index.find(doctorID);
+    if (it == appointmentSecondaryIndex.Index.end() || it->second.head == nullptr) {
         cout << "No appointments found for Doctor ID: " << doctorID << endl;
         return;
     }
     cout << "Appointments for Doctor ID: " << doctorID << "\n";
-    for (const string& appointmentID : *appointmentIDs) {
+    Node* current = it->second.head;
+    while (current) {
+        string appointmentID = current->doctorID;
         int pos = binarySearch(appointmentPrimaryIndex, appointmentID);
+
         if (pos != -1) {
             string record = readRecordFromFile(APPOINTMENT_FILE, appointmentPrimaryIndex[pos].second);
             size_t delim1 = record.find('|');
@@ -576,26 +538,18 @@ void HealthcareManagementSystem::searchAppointmentsByDoctorID() {
             string id = record.substr(0, delim1);
             string date = record.substr(delim1 + 1, delim2 - delim1 - 1);
             string docID = record.substr(delim2 + 1);
+
             cout << "\n--- Appointment Details ---\n";
             cout << "Appointment ID: " << id << "\n";
             cout << "Date: " << date << "\n";
             cout << "Doctor ID: " << docID << "\n";
             cout << "---------------------------\n";
         }
+
+        current = current->next;
     }
 }
-void HealthcareManagementSystem::loadAvailList(vector<int>& availList, const string& fileName) {
-    ifstream file(fileName, ios::in);
-    if (!file) {
-        cerr << "Error: Unable to open " << fileName << " for reading." << endl;
-        return;
-    }
-    int pos;
-    while (file >> pos) {
-        availList.push_back(pos);
-    }
-    file.close();
-}
+
 
 void HealthcareManagementSystem::saveAvailList(const vector<int>& availList, const string& fileName) {
     ofstream file(fileName, ios::out | ios::trunc);
@@ -736,7 +690,7 @@ void HealthcareManagementSystem::updateDoctor() {
     doctorFile << fixedLength << newRecord;
     doctorFile.close();
     doctorPrimaryIndex[pos].first = doctorID;
-    doctorSecondaryIndex.insert(newName, doctorID);
+    doctorSecondaryIndex.Insert(newName, doctorID);
     saveIndexes();
     doctorSecondaryIndex.save();
     cout << "Doctor record updated successfully.\n";
