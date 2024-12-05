@@ -347,22 +347,16 @@ void HealthcareManagementSystem::deleteDoctor() {
 }
 
 void HealthcareManagementSystem::searchDoctorByID(string doctorID) {
-
-
-    // Search doctorID in the primary index
     int pos = binarySearch(doctorPrimaryIndex, doctorID);
     if (pos == -1) {
         cout << "Doctor not found.\n";
         return;
     }
-    string record = readRecordFromFile(DOCTOR_FILE, doctorPrimaryIndex[pos].second);// Read the doctor record from the file
-    // Extract Doctor ID, Name, and Address in a single pass
-    size_t d1 = record.find('|');  // Find the first delimiter (after the doctor ID)
-    string id = record.substr(4, d1 - 4);  // Doctor ID is after the length field (first 6 chars)
-
-    size_t d2 = record.find('|', d1 + 1);  // Find the second delimiter (after the doctor ID)
-    string name = record.substr(d1 + 1, d2 - d1 - 1);  // Extract doctor name between the first and second '|'
-    // Extract the address (rest of the string after the second '|')
+    string record = readRecordFromFile(DOCTOR_FILE, doctorPrimaryIndex[pos].second);
+    size_t d1 = record.find('|');
+    string id = record.substr(4, d1 - 4); 
+    size_t d2 = record.find('|', d1 + 1);  
+    string name = record.substr(d1 + 1, d2 - d1 - 1);  
     string address = record.substr(d2 + 1);
     cout << "\n--- Doctor Details ---\n";
     cout << "Doctor ID: " << id << "\n";
@@ -480,64 +474,7 @@ void HealthcareManagementSystem::updateAppointment() {
     file.close();
     cout << "Appointment updated successfully.\n";
 }
-//there's an error in find() function, it returns linked list but in the below function it needs a vector<string>* 
-//error at line #469
-// void HealthcareManagementSystem::deleteAppointment() {
-//     string appointmentID;
-//     cout << "Enter Appointment ID to delete: ";
-//     cin >> appointmentID;
-//     int pos = binarySearch(appointmentPrimaryIndex, appointmentID);
-//     if (pos == -1) {
-//         cout << "Appointment not found.\n";
-//         return;
-//     }
-//     int position = appointmentPrimaryIndex[pos].second;
-//     markDeleted(appointmentAvailList, position, APPOINTMENT_FILE);
-//     appointmentPrimaryIndex.erase(appointmentPrimaryIndex.begin() + pos);
-//     string record = readRecordFromFile(APPOINTMENT_FILE, position);
-//     size_t delim1 = record.find('|');
-//     size_t delim2 = record.find('|', delim1 + 1);
-//     string doctorID = record.substr(delim2 + 1);
-    
-//      vector<string>* appointments = appointmentSecondaryIndex.find(doctorID);
-//     if (appointments) {
-//         appointments->erase(remove(appointments->begin(), appointments->end(), appointmentID), appointments->end());
-//         if (appointments->empty()) {
-//             appointmentSecondaryIndex.index.erase(doctorID); 
-//         }
-//     }
-//     saveIndexes();
-//     cout << "Appointment deleted successfully.\n";
-// }
 
-// same error at line 485 : auto* doesn't match the return value of the find function
-// void HealthcareManagementSystem::searchAppointmentsByDoctorID() {
-//     string doctorID;
-//     cout << "Enter Doctor ID to search for appointments: ";
-//     cin >> doctorID;
-//     auto* appointmentIDs = appointmentSecondaryIndex.find(doctorID);
-//     if (!appointmentIDs || appointmentIDs->empty()) {
-//         cout << "No appointments found for Doctor ID: " << doctorID << endl;
-//         return;
-//     }
-//     cout << "Appointments for Doctor ID: " << doctorID << "\n";
-//     for (const string& appointmentID : *appointmentIDs) {
-//         int pos = binarySearch(appointmentPrimaryIndex, appointmentID);
-//         if (pos != -1) {
-//             string record = readRecordFromFile(APPOINTMENT_FILE, appointmentPrimaryIndex[pos].second);
-//             size_t delim1 = record.find('|');
-//             size_t delim2 = record.find('|', delim1 + 1);
-//             string id = record.substr(0, delim1); 
-//             string date = record.substr(delim1 + 1, delim2 - delim1 - 1);  
-//             string docID = record.substr(delim2 + 1);
-//             cout << "\n--- Appointment Details ---\n";
-//             cout << "Appointment ID: " << id << "\n";
-//             cout << "Date: " << date << "\n";
-//             cout << "Doctor ID: " << docID << "\n";
-//             cout << "---------------------------\n";
-//         }
-//     }
-// }
 void HealthcareManagementSystem::loadAvailList(vector<int>& availList, const string& fileName) {
     ifstream file(fileName, ios::in);
     if (!file) {
@@ -562,7 +499,6 @@ void HealthcareManagementSystem::saveAvailList(const vector<int>& availList, con
     }
     file.close();
 }
-
 
 void HealthcareManagementSystem::updateAppointment() {
     string appointmentID, newDate;
