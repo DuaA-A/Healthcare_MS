@@ -1,12 +1,46 @@
-#include <iostream>
-#include <fstream>
-#include <string>
-#include <sstream>
-#include <vector>
-#include <map>
-#include <algorithm>
-#include <iomanip>
+#include <bits/stdc++.h>
 using namespace std;
+using std::literals::string_literals::operator""s;
+
+string ignoreKeysCasePermutations(string key) {
+    transform(key.begin(), key.end(), key.begin(), ::tolower);
+    return key;
+}
+
+bool isValidQuery(const string& query) {
+
+    if(query.substr(0, 11) != "select*from") {
+        return false;
+    }
+    //after from should be either doctors or appointments
+    if(query.substr(11, 7) != "doctors" && query.substr(11, 11) != "appointments") {
+        return false;
+    }
+    size_t wherePos = query.find("where");
+    if(wherePos == string::npos) {
+        return false;
+    }
+    //fields should be either doctorid, doctorname, appointmentid
+    if( query.substr(wherePos + 5, 8) != "doctorid" && query.substr(wherePos + 5, 10) != "doctorname" && query.substr(wherePos + 5, 12) != "appointmentid") {
+        return false;
+    }
+    //field value should be between single quotes
+    size_t firstQuotePos = query.find('\'');
+    if (firstQuotePos == string::npos) {
+        return false;
+    }
+
+    size_t secondQuotePos = query.find('\'', firstQuotePos + 1);
+    if (secondQuotePos == string::npos) {
+        return false;
+    }
+    string fieldValue = query.substr(firstQuotePos + 1, secondQuotePos - firstQuotePos - 1);
+    if (fieldValue.empty()) {
+        return false;
+    }
+    return true;
+
+}
 
 template <typename T>
 int binarySearch(const vector<pair<T, int>>& index, const T& key) {
@@ -62,39 +96,8 @@ public:
             current = current->next;
         }
     }
-
-    void insert(const string& doctorID) {
-        Node* newNode = new Node{doctorID, head};
-        head = newNode;
-    }
-
-    bool find(const string& doctorID) {
-        Node* current = head;
-        while (current) {
-            if (current->doctorID == doctorID)
-                return true;
-            current = current->next;
-        }
-        return false;
-    }
-
-    void remove(const string& doctorID) {
-        Node* current = head;
-        Node* prev = nullptr;
-        while (current) {
-            if (current->doctorID == doctorID) {
-                if (prev)
-                    prev->next = current->next;
-                else
-                    head = current->next;
-                delete current;
-                return;
-            }
-            prev = current;
-            current = current->next;
-        }
-    }
 };
+
 class SecondaryIndex {
 public:
     map<string, LinkedList> Index;
@@ -191,12 +194,12 @@ public:
     void deleteAppointment();
     void searchDoctorByID(string doctorID);
     void searchDoctorByName();
+    void searchAppointmentsByID();
     void searchAppointmentsByDoctorID();
     void loadIndexes();
     void saveIndexes();
     void loadAvailList(vector<int>& availList, const string& fileName);
     void saveAvailList(const vector<int>& availList, const string& fileName);
-    void searchNameForQuary(string doctorID);
     void processQuery(const string& query);
 
 };
@@ -211,9 +214,10 @@ void HealthcareManagementSystem::displayMenu() {
     cout << "6. Delete Appointment\n";
     cout << "7. Search Doctor by ID\n";
     cout << "8. Search Doctor by Name\n";
-    cout << "9. Search Appointments by Doctor ID\n";
-    cout << "10. Write Quary\n";
-    cout << "11. Exit\n";
+    cout << "9. Search Appointments by Appointment ID\n";
+    cout << "10. Search Appointments by Doctor ID\n";
+    cout << "11. Write Quary\n";
+    cout << "12. Exit\n";
     cout << "Enter your choice: ";
 }
 string HealthcareManagementSystem::readRecordFromFile(const string& fileName, int position) {
@@ -338,7 +342,6 @@ void HealthcareManagementSystem::deleteDoctor() {
 
     cout << "Doctor deleted successfully.\n";
 }
-
 void HealthcareManagementSystem::searchDoctorByID(string doctorID) {
     int pos = binarySearch(doctorPrimaryIndex, doctorID);
     if (pos == -1) {
@@ -387,6 +390,94 @@ void HealthcareManagementSystem::searchDoctorByName() {
         doctorIDs = doctorIDs->next;
     }
 }
+
+
+
+
+void HealthcareManagementSystem::loadAvailList(vector<int>& availList, const string& fileName) {
+    ifstream file(fileName, ios::in);
+    if (!file) {
+        cerr << "Error: Unable to open " << fileName << " for reading." << endl;
+        return;
+    }
+    int pos;
+    while (file >> pos) {
+        availList.push_back(pos);
+    }
+    file.close();
+}
+void HealthcareManagementSystem::saveAvailList(const vector<int>& availList, const string& fileName) {
+    ofstream file(fileName, ios::out | ios::trunc);
+    if (!file) {
+        cerr << "Error: Unable to open " << fileName << " for writing." << endl;
+        return;
+    }
+    for (int pos : availList) {
+        file << pos << "\n";
+    }
+    file.close();
+}
+
+
+void HealthcareManagementSystem::updateAppointment() {
+    string appointmentID, newDate;
+    cout << "Enter Appointment ID to update: ";
+    cin >> appointmentID;
+
+    int pos = binarySearch(appointmentPrimaryIndex, appointmentID);
+    if (pos == -1) {
+        cout << "Appointment not found.\n";
+        return;
+    }
+    cout << "Enter new appointment date (leave blank to skip): ";
+    cin.ignore();
+    getline(cin, newDate);
+    string record = readRecordFromFile(APPOINTMENT_FILE, appointmentPrimaryIndex[pos].second);
+    size_t delim1 = record.find('|');
+    size_t delim2 = record.find('|', delim1 + 1);
+    string id = record.substr(0, delim1);
+    string date = record.substr(delim1 + 1, delim2 - delim1 - 1);
+    string doctorID = record.substr(delim2 + 1);
+    if (!newDate.empty()) {
+        date = newDate;
+    }
+    string updatedRecord = id + "|" + date + "|" + doctorID;
+    fstream file(APPOINTMENT_FILE, ios::in | ios::out);
+    file.seekp(appointmentPrimaryIndex[pos].second, ios::beg);
+    file << setw(4) << setfill('0') << updatedRecord.length() << updatedRecord << "\n";
+    file.close();
+    cout << "Appointment updated successfully.\n";
+}
+void HealthcareManagementSystem::deleteAppointment() {
+    string appointmentID;
+    cout << "Enter Appointment ID to delete: ";
+    cin >> appointmentID;
+
+    // Find the appointment in the primary index
+    int pos = binarySearch(appointmentPrimaryIndex, appointmentID);
+    if (pos == -1) {
+        cout << "Appointment not found.\n";
+        return;
+    }
+    int position = appointmentPrimaryIndex[pos].second;
+    markDeleted(appointmentAvailList, position, APPOINTMENT_FILE);
+    string record = readRecordFromFile(APPOINTMENT_FILE, position);
+    size_t delim1 = record.find('|');
+    size_t delim2 = record.find('|', delim1 + 1);
+    string doctorID = record.substr(delim2 + 1);
+
+    appointmentPrimaryIndex.erase(appointmentPrimaryIndex.begin() + pos);
+    auto it = appointmentSecondaryIndex.Index.find(doctorID);
+    if (it != appointmentSecondaryIndex.Index.end()) {
+        LinkedList& appointmentList = it->second;
+        appointmentList.remove(appointmentID);
+        if (appointmentList.head == nullptr) {
+            appointmentSecondaryIndex.Index.erase(doctorID);
+        }
+    }
+    saveIndexes();
+    cout << "Appointment deleted successfully.\n";
+}
 void HealthcareManagementSystem::addAppointment(const string& appointmentID, const string& doctorID, const string& date) {
     if (appointmentID.length() > 15 || doctorID.length() > 15 || date.length() > 30) {
         cout << "Error: Input exceeds the maximum allowed length.\n";
@@ -426,94 +517,27 @@ void HealthcareManagementSystem::addAppointment(const string& appointmentID, con
     saveIndexes();
     cout << "Appointment added successfully.\n";
 }
-
-void HealthcareManagementSystem::loadAvailList(vector<int>& availList, const string& fileName) {
-    ifstream file(fileName, ios::in);
-    if (!file) {
-        cerr << "Error: Unable to open " << fileName << " for reading." << endl;
-        return;
-    }
-    int pos;
-    while (file >> pos) {
-        availList.push_back(pos);
-    }
-    file.close();
-}
-
-void HealthcareManagementSystem::saveAvailList(const vector<int>& availList, const string& fileName) {
-    ofstream file(fileName, ios::out | ios::trunc);
-    if (!file) {
-        cerr << "Error: Unable to open " << fileName << " for writing." << endl;
-        return;
-    }
-    for (int pos : availList) {
-        file << pos << "\n";
-    }
-    file.close();
-}
-
-void HealthcareManagementSystem::updateAppointment() {
-    string appointmentID, newDate;
-    cout << "Enter Appointment ID to update: ";
+void HealthcareManagementSystem::searchAppointmentsByID() {
+    string appointmentID;
+    cout << "Enter Appointment ID to search: ";
     cin >> appointmentID;
-
     int pos = binarySearch(appointmentPrimaryIndex, appointmentID);
     if (pos == -1) {
         cout << "Appointment not found.\n";
         return;
     }
-    cout << "Enter new appointment date (leave blank to skip): ";
-    cin.ignore();
-    getline(cin, newDate);
     string record = readRecordFromFile(APPOINTMENT_FILE, appointmentPrimaryIndex[pos].second);
     size_t delim1 = record.find('|');
     size_t delim2 = record.find('|', delim1 + 1);
     string id = record.substr(0, delim1);
     string date = record.substr(delim1 + 1, delim2 - delim1 - 1);
-    string doctorID = record.substr(delim2 + 1);
-    if (!newDate.empty()) {
-        date = newDate;
-    }
-    string updatedRecord = id + "|" + date + "|" + doctorID;
-    fstream file(APPOINTMENT_FILE, ios::in | ios::out);
-    file.seekp(appointmentPrimaryIndex[pos].second, ios::beg);
-    file << setw(4) << setfill('0') << updatedRecord.length() << updatedRecord << "\n";
-    file.close();
-    cout << "Appointment updated successfully.\n";
+    string docID = record.substr(delim2 + 1);
+    cout << "\n--- Appointment Details ---\n";
+    cout << "Appointment ID: " << id << "\n";
+    cout << "Date: " << date << "\n";
+    cout << "Doctor ID: " << docID << "\n";
+    cout << "---------------------------\n";
 }
-
-void HealthcareManagementSystem::deleteAppointment() {
-    string appointmentID;
-    cout << "Enter Appointment ID to delete: ";
-    cin >> appointmentID;
-
-    // Find the appointment in the primary index
-    int pos = binarySearch(appointmentPrimaryIndex, appointmentID);
-    if (pos == -1) {
-        cout << "Appointment not found.\n";
-        return;
-    }
-    int position = appointmentPrimaryIndex[pos].second;
-    markDeleted(appointmentAvailList, position, APPOINTMENT_FILE);
-    string record = readRecordFromFile(APPOINTMENT_FILE, position);
-    size_t delim1 = record.find('|');
-    size_t delim2 = record.find('|', delim1 + 1);
-    string doctorID = record.substr(delim2 + 1);
-
-    appointmentPrimaryIndex.erase(appointmentPrimaryIndex.begin() + pos);
-    auto it = appointmentSecondaryIndex.Index.find(doctorID);
-    if (it != appointmentSecondaryIndex.Index.end()) {
-        LinkedList& appointmentList = it->second;
-        appointmentList.remove(appointmentID);
-        if (appointmentList.head == nullptr) {
-            appointmentSecondaryIndex.Index.erase(doctorID);
-        }
-    }
-    saveIndexes();
-    cout << "Appointment deleted successfully.\n";
-}
-
-
 void HealthcareManagementSystem::searchAppointmentsByDoctorID() {
     string doctorID;
     cout << "Enter Doctor ID to search for appointments: ";
@@ -550,18 +574,6 @@ void HealthcareManagementSystem::searchAppointmentsByDoctorID() {
     }
 }
 
-
-void HealthcareManagementSystem::saveAvailList(const vector<int>& availList, const string& fileName) {
-    ofstream file(fileName, ios::out | ios::trunc);
-    if (!file) {
-        cerr << "Error: Unable to open " << fileName << " for writing." << endl;
-        return;
-    }
-    for (int pos : availList) {
-        file << pos << "\n";
-    }
-    file.close();
-}
 
 string HealthcareManagementSystem::extractField(const string& record, int fieldIndex) {
     stringstream ss(record);
@@ -724,42 +736,46 @@ void HealthcareManagementSystem::searchNameForQuary(string doctorID) {
 
 
 void HealthcareManagementSystem::processQuery(const string& query) {
-    string sanitizedQuery = query;
-    sanitizedQuery.erase(remove(sanitizedQuery.begin(), sanitizedQuery.end(), ' '), sanitizedQuery.end());
 
-    size_t posWhere = sanitizedQuery.find("WHERE");
-    if (posWhere == string::npos) {
-        cout << "Invalid query format.\n";
+    // Preprocess the query: remove spaces and ignore case permutations
+    string processedQuery = ignoreKeysCasePermutations(query);
+    processedQuery.erase(remove(processedQuery.begin(), processedQuery.end(), ' '), processedQuery.end());
+
+    // Validate the query
+    if (not isValidQuery(processedQuery)) {
+        cout << "Invalid query. Please try again.\n";
         return;
     }
 
-    string condition = sanitizedQuery.substr(posWhere + 5);
-    size_t posEqual = condition.find('=');
-    if (posEqual == string::npos) {
-        cout << "Invalid condition in query.\n";
-        return;
+    // Extract table name (between 'from' and 'where')
+    size_t fromPos = processedQuery.find("from") + 4;  // Skip 'from'
+    size_t wherePos = processedQuery.find("where");
+    string tableName = processedQuery.substr(fromPos, wherePos - fromPos);
+
+    // Extract field name (between 'where' and '=')
+    size_t fieldStartPos = wherePos + 5;  // Skip 'where'
+    size_t equalPos = processedQuery.find('=');
+    string fieldName = processedQuery.substr(fieldStartPos, equalPos - fieldStartPos);
+
+    // Extract field value (between the single quotes)
+    size_t firstQuotePos = processedQuery.find('\'') + 1;  // Skip the first quote
+    size_t secondQuotePos = processedQuery.find('\'', firstQuotePos);
+    string fieldValue = processedQuery.substr(firstQuotePos, secondQuotePos - firstQuotePos);
+
+    if(tableName == "doctors") {
+        if(fieldName == "doctorid") {
+            searchDoctorByID(fieldValue);
+        } else if(fieldName == "doctorname") {
+            searchNameForQuary(fieldValue);
+        }
+    } else if(tableName == "appointments") {
+        if(fieldName == "appointmentid") {
+            searchAppointmentsByID();
+        } else if(fieldName == "doctorid") {
+            searchAppointmentsByDoctorID();
+        }
     }
 
-    string key = condition.substr(0, posEqual);
-    string value = condition.substr(posEqual + 1);
-    if (!value.empty() && value.front() == '\'' && value.back() == '\'') {
-        value = value.substr(1, value.size() - 2);
-    }
-
-    value.erase(0, value.find_first_not_of(' '));
-    value.erase(value.find_last_not_of(' ') + 1);
-
-    if (key == "DoctorID") {
-        searchDoctorByID(value);
-    }
-    else if (key == "DoctorName") {
-        cout << "Searching for Doctor Name: " << value << endl;
-        searchNameForQuary(value);
-    }
-    else
-    {
-        cout << "Unknown key in query.\n";
-    }
 }
 int main() {
     HealthcareManagementSystem system;
@@ -823,11 +839,16 @@ int main() {
                 system.searchDoctorByName();
                 break;
             }
-            case 9: {  // Search Appointments by Doctor ID
-                system.searchAppointmentsByDoctorID();  
+            case 9: {  // Search Appointments by Appointment ID
+                system.searchAppointmentsByID();
                 break;
             }
-            case 10: {
+            case 10:{
+                system.searchAppointmentsByDoctorID();
+                break;
+            }
+
+            case 11: {
                 string query;
                 cout << "Enter your query: ";
                 cin.ignore();
@@ -835,9 +856,10 @@ int main() {
                 system.processQuery(query);
                 break;
             }
-            case 11: {
+            case 12: {
                 cout << "Exiting...\n";
-                break;
+                std::exit(0);
+                // no need to break here
             }
             default: { 
                 cout << "Invalid choice. Please try again.\n";
