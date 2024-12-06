@@ -24,18 +24,21 @@ bool isValidQuery(const string& query) {
     bool startsWithSelectDoctorNameFrom = query.substr(0, 20) == "selectdoctornamefrom";
 
     if (!startsWithSelectFrom && !startsWithSelectDoctorNameFrom) {
+        cout << "Make sure the query starts with 'select * from' or 'select doctor name from'.\n";
         return false; // Invalid query if it doesn't start with either format
     }
 
     // After 'from', check for table names: 'doctors' or 'appointments'
     size_t fromPos = startsWithSelectFrom ? 11 : 20;  // Adjust starting point based on the format
     if (query.substr(fromPos, 7) != "doctors" && query.substr(fromPos, 12) != "appointments") {
+        cout << "Invalid table name.\n";
         return false; // Invalid table name
     }
 
     // Find the 'where' clause in the query
     size_t wherePos = query.find("where");
     if (wherePos == string::npos) {
+        cout << "where clause missing.\n";
         return false; // 'where' clause missing
     }
 
@@ -44,22 +47,26 @@ bool isValidQuery(const string& query) {
     if (query.substr(fieldStartPos, 8) != "doctorid" &&
         query.substr(fieldStartPos, 10) != "doctorname" &&
         query.substr(fieldStartPos, 13) != "appointmentid") {
+        cout << "Invalid field name.\n";
         return false; // Invalid field name
     }
 
     // The field value should be between single quotes
     size_t firstQuotePos = query.find('\'', wherePos);
     if (firstQuotePos == string::npos) {
+        cout << "Field value must be enclosed in single quotes.\n";
         return false; // Missing opening quote
     }
 
     size_t secondQuotePos = query.find('\'', firstQuotePos + 1);
     if (secondQuotePos == string::npos) {
+        cout << "Unclosed quote.\n";
         return false; // Missing closing quote
     }
 
     string fieldValue = query.substr(firstQuotePos + 1, secondQuotePos - firstQuotePos - 1);
     if (fieldValue.empty()) {
+        cout << "Empty field value.\n";
         return false; // Empty field value
     }
 
