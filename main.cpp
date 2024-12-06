@@ -86,8 +86,31 @@ public:
     DoctorNode* head;
     LinkedList() : head(nullptr) {}
     void insert(const string& doctorID) {
-        DoctorNode* newNode = new DoctorNode{doctorID, head};
-        head = newNode;
+        // Create a new node for the doctor
+        DoctorNode* newNode = new DoctorNode{doctorID, nullptr};
+
+        // If the list is empty, simply insert the new node
+        if (!head) {
+            head = newNode;
+            return;
+        }
+
+        // If the new doctor ID should be at the beginning (lexicographically smallest)
+        if (head->doctorID > doctorID) {
+            newNode->next = head;
+            head = newNode;
+            return;
+        }
+
+        // Traverse the list to find the correct position to insert the new node
+        DoctorNode* current = head;
+        while (current->next && current->next->doctorID < doctorID) {
+            current = current->next;
+        }
+
+        // Insert the new node after the current node
+        newNode->next = current->next;
+        current->next = newNode;
     }
     bool find(const string& doctorID) {
         DoctorNode* current = head;
@@ -440,8 +463,6 @@ void HealthcareManagementSystem::addDoctor(const string& doctorID, const string&
 
     cout << "Doctor added successfully.\n";
 }
-
-
 void HealthcareManagementSystem::deleteDoctor() {
     string doctorID;
     cout << "Enter Doctor ID to delete: ";
@@ -465,7 +486,6 @@ void HealthcareManagementSystem::deleteDoctor() {
 
     cout << "Doctor deleted successfully.\n";
 }
-
 void HealthcareManagementSystem::searchDoctorByID(string doctorID) {
     int pos = binarySearch(doctorPrimaryIndex, doctorID);
     if (pos == -1) {
@@ -602,7 +622,6 @@ void HealthcareManagementSystem::addAppointment(const string& appointmentID, con
     saveIndexes();
     cout << "Appointment added successfully.\n";
 }
-
 void HealthcareManagementSystem::updateAppointment() {
     string appointmentID, newDate, newDoctorID;
     cout << "Enter Appointment ID to update: ";
@@ -653,7 +672,6 @@ void HealthcareManagementSystem::updateAppointment() {
     saveIndexes();
     cout << "Appointment updated successfully.\n";
 }
-
 void HealthcareManagementSystem::searchAppointmentsByID(string arg = ""s) {
     string appointmentID;
     if (arg.empty()) {
@@ -918,7 +936,6 @@ void HealthcareManagementSystem::processQuery(const string& query) {
         if (queryFieldName == "doctorid"&& fieldName == "*") {
             searchDoctorByID(fieldValue);
         } else if (queryFieldName == "doctorid" &&fieldName == "doctorname") {
-            cout << "dddd";
             searchNameForQuary(fieldValue);
         }
     } else if (tableName == "appointments") {
