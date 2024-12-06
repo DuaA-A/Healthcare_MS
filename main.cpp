@@ -1039,7 +1039,7 @@ int main() {
                 break;
             }
         }
-    } while (1);
+    } while (choice>0 && choice<13);
     system.saveIndexes();
     return 0;
 }
