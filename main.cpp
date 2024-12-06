@@ -12,64 +12,54 @@ using namespace std;
 using std::literals::string_literals::operator""s;
 
 string ignoreKeysCasePermutations(string key) {
-    //until the first qoute
     long end = (long)key.find('\'');
     transform(key.begin(), key.begin() + end, key.begin(), ::tolower);
     return key;
 }
 
 bool isValidQuery(const string& query) {
-
     bool startsWithSelectFrom = query.substr(0, 11) == "select*from";
     bool startsWithSelectDoctorNameFrom = query.substr(0, 20) == "selectdoctornamefrom";
-
     if (!startsWithSelectFrom && !startsWithSelectDoctorNameFrom) {
         cout << "Make sure the query starts with 'select * from' or 'select doctor name from'.\n";
         return false; // Invalid query if it doesn't start with either format
     }
-
     // After 'from', check for table names: 'doctors' or 'appointments'
     size_t fromPos = startsWithSelectFrom ? 11 : 20;  // Adjust starting point based on the format
     if (query.substr(fromPos, 7) != "doctors" && query.substr(fromPos, 12) != "appointments") {
         cout << "Invalid table name.\n";
-        return false; // Invalid table name
+        return false;
     }
-
     // Find the 'where' clause in the query
     size_t wherePos = query.find("where");
     if (wherePos == string::npos) {
         cout << "where clause missing.\n";
         return false; // 'where' clause missing
     }
-
     // Fields should be either 'doctorid', 'doctorname', or 'appointmentid'
     size_t fieldStartPos = wherePos + 5; // Skip "where"
     if (query.substr(fieldStartPos, 8) != "doctorid" &&
         query.substr(fieldStartPos, 10) != "doctorname" &&
         query.substr(fieldStartPos, 13) != "appointmentid") {
         cout << "Invalid field name.\n";
-        return false; // Invalid field name
+        return false; 
     }
-
     // The field value should be between single quotes
     size_t firstQuotePos = query.find('\'', wherePos);
     if (firstQuotePos == string::npos) {
         cout << "Field value must be enclosed in single quotes.\n";
         return false; // Missing opening quote
     }
-
     size_t secondQuotePos = query.find('\'', firstQuotePos + 1);
     if (secondQuotePos == string::npos) {
         cout << "Unclosed quote.\n";
         return false; // Missing closing quote
     }
-
     string fieldValue = query.substr(firstQuotePos + 1, secondQuotePos - firstQuotePos - 1);
     if (fieldValue.empty()) {
         cout << "Empty field value.\n";
         return false; // Empty field value
     }
-
     return true;
 }
 
@@ -95,12 +85,10 @@ class LinkedList {
 public:
     DoctorNode* head;
     LinkedList() : head(nullptr) {}
-
     void insert(const string& doctorID) {
         DoctorNode* newNode = new DoctorNode{doctorID, head};
         head = newNode;
     }
-
     bool find(const string& doctorID) {
         DoctorNode* current = head;
         while (current) {
@@ -377,7 +365,6 @@ string HealthcareManagementSystem::readRecordFromFile(const string& fileName, in
     getline(file, record);
     if (!record.empty() && record.back() == '*')
         record = record.substr(0, record.length() - 1);
-
     file.close();
     return record;
 }
@@ -412,20 +399,14 @@ void HealthcareManagementSystem::addDoctor(const string& doctorID, const string&
         cout << "Doctor with this ID already exists.\n";
         return;
     }
-
     string fullRecord = doctorID + "|" + name + "|" + address;
     int recordLength = fullRecord.length();
     int position = -1;
-
     if (!doctorAvailList.empty()) {
-
         int availablePosition = doctorAvailList.back();
-
         string existingRecord = readRecordFromFile(DOCTOR_FILE, availablePosition);
         int existingRecordLength = stoi(existingRecord.substr(0, 4));
-
         if (existingRecordLength >= recordLength) {
-
             position = availablePosition;
             doctorAvailList.pop_back();
         }
@@ -433,7 +414,6 @@ void HealthcareManagementSystem::addDoctor(const string& doctorID, const string&
     if(position == -1 && doctorPrimaryIndex.empty()) {
         position=0;
     }
-
     if (position == -1) {
         fstream doctorFile(DOCTOR_FILE, ios::in | ios::out | ios::app);
         if (!doctorFile) {
@@ -444,24 +424,17 @@ void HealthcareManagementSystem::addDoctor(const string& doctorID, const string&
         position = doctorFile.tellp();
         doctorFile.close();
     }
-
-    // Write the new doctor record
     fstream doctorFile(DOCTOR_FILE, ios::in | ios::out);
     doctorFile.seekp(position, ios::beg);
     stringstream ss;
     ss << setw(4) << setfill('0') << recordLength;
     string fixedLength = ss.str();
-
-    // Append the new doctor record
     doctorFile << fixedLength << fullRecord<<'\n';
     doctorFile.close();
     doctorPrimaryIndex.push_back({doctorID, position});
     sort(doctorPrimaryIndex.begin(), doctorPrimaryIndex.end());
 
-    // Update the secondary index (doctor's name)
     doctorSecondaryIndex.Insert(name, doctorID);
-
-    // Save indexes to file
     saveIndexes();
     doctorSecondaryIndex.save();
 
@@ -542,9 +515,6 @@ void HealthcareManagementSystem::searchDoctorByName() {
     }
 }
 
-
-
-
 void HealthcareManagementSystem::loadAvailList(vector<int>& availList, const string& fileName) {
     ifstream file(fileName, ios::in);
     if (!file) {
@@ -557,6 +527,7 @@ void HealthcareManagementSystem::loadAvailList(vector<int>& availList, const str
     }
     file.close();
 }
+
 void HealthcareManagementSystem::saveAvailList(const vector<int>& availList, const string& fileName) {
     ofstream file(fileName, ios::out | ios::trunc);
     if (!file) {
@@ -584,7 +555,6 @@ void HealthcareManagementSystem::deleteAppointment() {
     string record = readRecordFromFile(APPOINTMENT_FILE, position);
     size_t delim2 = record.find('|', record.find('|') + 1);
     string doctorID = record.substr(delim2 + 1);
-
     appointmentPrimaryIndex.erase(appointmentPrimaryIndex.begin() + pos);
     auto it = appointmentSecondaryIndex.Index.find(doctorID);
     if (it != appointmentSecondaryIndex.Index.end()) {
@@ -605,12 +575,14 @@ void HealthcareManagementSystem::addAppointment(const string& appointmentID, con
         cout << "Error: Input exceeds the maximum allowed length.\n";
         return;
     }
-
+    if (binarySearch(doctorPrimaryIndex, doctorID) == -1) { 
+        cout << "Error: Doctor ID does not exist. Please add the doctor before adding an appointment.\n";
+        return;
+    }
     if (binarySearch(appointmentPrimaryIndex, appointmentID) != -1) {
         cout << "Appointment with this ID already exists.\n";
         return;
     }
-
     int position = findAvailableSlot(appointmentAvailList, APPOINTMENT_FILE);
     if (position == -1) {
         fstream appointmentFile(APPOINTMENT_FILE, ios::in | ios::out);
@@ -618,17 +590,14 @@ void HealthcareManagementSystem::addAppointment(const string& appointmentID, con
         position = appointmentFile.tellp();
         appointmentFile.close();
     }
-
     string fullRecord = appointmentID + "|" + date + "|" + doctorID;
     fstream appointmentFile(APPOINTMENT_FILE, ios::in | ios::out);
     appointmentFile.seekp(position, ios::beg);
     appointmentFile << setw(4) << setfill('0') << fullRecord.length() << fullRecord << "\n";
     appointmentFile.close();
-
     auto it = lower_bound(appointmentPrimaryIndex.begin(), appointmentPrimaryIndex.end(), make_pair(appointmentID, 0));
     appointmentPrimaryIndex.insert(it, {appointmentID, position});
     appointmentSecondaryIndex.insert(doctorID, appointmentID, date);
-
     appointmentSecondaryIndex.save();
     saveIndexes();
     cout << "Appointment added successfully.\n";
@@ -638,7 +607,11 @@ void HealthcareManagementSystem::updateAppointment() {
     string appointmentID, newDate, newDoctorID;
     cout << "Enter Appointment ID to update: ";
     cin >> appointmentID;
-
+    
+    if (appointmentID.length() > 15 ) {
+        cout << "Error: Input exceeds the maximum allowed length.\n";
+        return;
+    }
     int pos = binarySearch(appointmentPrimaryIndex, appointmentID);
     if (pos == -1) {
         cout << "Appointment not found.\n";
@@ -660,9 +633,8 @@ void HealthcareManagementSystem::updateAppointment() {
     getline(cin, newDoctorID);
     if (!newDoctorID.empty() && newDoctorID != doctorID) {
         appointmentSecondaryIndex.Index[doctorID].remove(appointmentID);
-        if (appointmentSecondaryIndex.Index[doctorID].head == nullptr) {
+        if (appointmentSecondaryIndex.Index[doctorID].head == nullptr) 
             appointmentSecondaryIndex.Index.erase(doctorID);
-        }
         appointmentSecondaryIndex.insert(newDoctorID, appointmentID, date);
         doctorID = newDoctorID;
     }
