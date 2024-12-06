@@ -1,5 +1,11 @@
-#include <bits/stdc++.h>
-
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <sstream>
+#include <vector>
+#include <map>
+#include <algorithm>
+#include <iomanip>
 #include <utility>
 using namespace std;
 using std::literals::string_literals::operator""s;
@@ -762,7 +768,7 @@ void HealthcareManagementSystem::processQuery(const string& query) {
     processedQuery.erase(remove(processedQuery.begin(), processedQuery.end(), ' '), processedQuery.end());
 
     // Validate the query
-    while (not isValidQuery(processedQuery)) {
+    while (!isValidQuery(processedQuery)) {
         cout << "Invalid query. Please try again.\n";
         cout << "Enter your query: ";
         getline(cin, processedQuery);
