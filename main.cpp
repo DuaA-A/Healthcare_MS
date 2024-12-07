@@ -24,27 +24,23 @@ bool isValidQuery(const string& query) {
         cout << "Make sure the query starts with 'select * from' or 'select doctor name from'.\n";
         return false; // Invalid query if it doesn't start with either format
     }
-    // After 'from', check for table names: 'doctors' or 'appointments'
     size_t fromPos = startsWithSelectFrom ? 11 : 20;  // Adjust starting point based on the format
     if (query.substr(fromPos, 7) != "doctors" && query.substr(fromPos, 12) != "appointments") {
         cout << "Invalid table name.\n";
         return false;
     }
-    // Find the 'where' clause in the query
     size_t wherePos = query.find("where");
     if (wherePos == string::npos) {
         cout << "where clause missing.\n";
         return false; // 'where' clause missing
     }
-    // Fields should be either 'doctorid', 'doctorname', or 'appointmentid'
     size_t fieldStartPos = wherePos + 5; // Skip "where"
     if (query.substr(fieldStartPos, 8) != "doctorid" &&
         query.substr(fieldStartPos, 10) != "doctorname" &&
         query.substr(fieldStartPos, 13) != "appointmentid") {
         cout << "Invalid field name.\n";
-        return false; 
+        return false;
     }
-    // The field value should be between single quotes
     size_t firstQuotePos = query.find('\'', wherePos);
     if (firstQuotePos == string::npos) {
         cout << "Field value must be enclosed in single quotes.\n";
@@ -86,8 +82,22 @@ public:
     DoctorNode* head;
     LinkedList() : head(nullptr) {}
     void insert(const string& doctorID) {
-        DoctorNode* newNode = new DoctorNode{doctorID, head};
-        head = newNode;
+       DoctorNode * newNode = new DoctorNode{doctorID, nullptr};
+        if (!head) {
+            head = newNode;
+            return;
+        }
+        if (head->doctorID > doctorID) {
+            newNode->next = head;
+            head = newNode;
+            return;
+        }
+        DoctorNode* current = head;
+        while (current->next && current->next->doctorID < doctorID) {
+            current = current->next;
+        }
+        newNode->next = current->next;
+        current->next = newNode;
     }
     bool find(const string& doctorID) {
         DoctorNode* current = head;
@@ -119,14 +129,14 @@ public:
 
 class DoctorSecondaryIndex {
 public:
-    map<string, LinkedList> Index; 
+    map<string, LinkedList> Index;
     const string DOCTOR_SECONDARY_INDEX_FILE = "doctor_secondary.index";
 
     void Insert(const string& secondaryKey, const string& doctorID);
     bool find(const string& secondaryKey, const string& doctorID);
     void remove(const string& secondaryKey, const string& doctorID);
-    void load(); 
-    void save(); 
+    void load();
+    void save();
 };
 
 
@@ -542,30 +552,25 @@ void HealthcareManagementSystem::deleteAppointment() {
     string appointmentID;
     cout << "Enter Appointment ID to delete: ";
     cin >> appointmentID;
-
     int pos = binarySearch(appointmentPrimaryIndex, appointmentID);
     if (pos == -1) {
         cout << "Appointment not found.\n";
         return;
     }
-    int position = appointmentPrimaryIndex[pos].second;
-    markDeleted(appointmentAvailList, position, APPOINTMENT_FILE);
-    string record = readRecordFromFile(APPOINTMENT_FILE, position);
-    size_t delim2 = record.find('|', record.find('|') + 1);
-    string doctorID = record.substr(delim2 + 1);
+    string appointmentIDToDelete = appointmentPrimaryIndex[pos].first;
+    int recordPosition = appointmentPrimaryIndex[pos].second;
+    string record = readRecordFromFile(APPOINTMENT_FILE, recordPosition);
+    size_t d1 = record.find('|');
+    size_t d2 = record.find('|', d1 + 1);
+    string doctorID = record.substr(d2 + 1);
+    markDeleted(appointmentAvailList, recordPosition, APPOINTMENT_FILE);
     appointmentPrimaryIndex.erase(appointmentPrimaryIndex.begin() + pos);
-    auto it = appointmentSecondaryIndex.Index.find(doctorID);
-    if (it != appointmentSecondaryIndex.Index.end()) {
-        AppointmentLinkedList& appointmentList = it->second;
-        appointmentList.remove(appointmentID);
-        if (appointmentList.head == nullptr) {
-            appointmentSecondaryIndex.Index.erase(doctorID);
-        }
-    }
-    appointmentSecondaryIndex.save();
     saveIndexes();
+    appointmentSecondaryIndex.remove(doctorID, appointmentIDToDelete);
+    appointmentSecondaryIndex.save();
     cout << "Appointment deleted successfully.\n";
 }
+
 
 
 void HealthcareManagementSystem::addAppointment(const string& appointmentID, const string& doctorID, const string& date) {
@@ -573,7 +578,7 @@ void HealthcareManagementSystem::addAppointment(const string& appointmentID, con
         cout << "Error: Input exceeds the maximum allowed length.\n";
         return;
     }
-    if (binarySearch(doctorPrimaryIndex, doctorID) == -1) { 
+    if (binarySearch(doctorPrimaryIndex, doctorID) == -1) {
         cout << "Error: Doctor ID does not exist. Please add the doctor before adding an appointment.\n";
         return;
     }
@@ -605,7 +610,7 @@ void HealthcareManagementSystem::updateAppointment() {
     string appointmentID, newDate, newDoctorID;
     cout << "Enter Appointment ID to update: ";
     cin >> appointmentID;
-    
+
     if (appointmentID.length() > 15 ) {
         cout << "Error: Input exceeds the maximum allowed length.\n";
         return;
@@ -631,7 +636,7 @@ void HealthcareManagementSystem::updateAppointment() {
     getline(cin, newDoctorID);
     if (!newDoctorID.empty() && newDoctorID != doctorID) {
         appointmentSecondaryIndex.Index[doctorID].remove(appointmentID);
-        if (appointmentSecondaryIndex.Index[doctorID].head == nullptr) 
+        if (appointmentSecondaryIndex.Index[doctorID].head == nullptr)
             appointmentSecondaryIndex.Index.erase(doctorID);
         appointmentSecondaryIndex.insert(newDoctorID, appointmentID);
         doctorID = newDoctorID;
@@ -666,7 +671,7 @@ void HealthcareManagementSystem::searchAppointmentsByID(string arg = ""s) {
         return;
     }
     string record = readRecordFromFile(APPOINTMENT_FILE, appointmentPrimaryIndex[pos].second);
-    if (record.empty()) { 
+    if (record.empty()) {
         cout << "Error: Unable to retrieve appointment record.\n";
         return;
     }
@@ -729,10 +734,10 @@ string HealthcareManagementSystem::extractField(const string& record, int fieldI
         start = end + 1;
         currentIndex++;
     }
-    if (currentIndex == fieldIndex) 
+    if (currentIndex == fieldIndex)
         return record.substr(start);
-    
-    return ""; 
+
+    return "";
 }
 
 void HealthcareManagementSystem::loadIndexes() {
@@ -765,7 +770,7 @@ void HealthcareManagementSystem::loadIndexes() {
         }
         appointmentIndexFile.close();
     }
-    appointmentSecondaryIndex.load();  
+    appointmentSecondaryIndex.load();
     sort(appointmentPrimaryIndex.begin(), appointmentPrimaryIndex.end());
     loadAvailList(doctorAvailList, "doctor.avail");
     loadAvailList(appointmentAvailList, "appointment.avail");
@@ -916,7 +921,6 @@ void HealthcareManagementSystem::processQuery(const string& query) {
         if (queryFieldName == "doctorid"&& fieldName == "*") {
             searchDoctorByID(fieldValue);
         } else if (queryFieldName == "doctorid" &&fieldName == "doctorname") {
-            cout << "dddd";
             searchNameForQuary(fieldValue);
         }
     } else if (tableName == "appointments") {
